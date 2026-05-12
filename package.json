@@ -1,0 +1,108 @@
+{
+  "name": "code-timer",
+  "displayName": "Code Timer",
+  "description": "Tracks active coding time per repo and injects it into git commit messages.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeTimer.actions",
+        "title": "Code Timer: Actions"
+      },
+      {
+        "command": "codeTimer.reset",
+        "title": "Code Timer: Reset"
+      },
+      {
+        "command": "codeTimer.toggle",
+        "title": "Code Timer: Pause / Resume"
+      },
+      {
+        "command": "codeTimer.addHour",
+        "title": "Code Timer: +1 hour"
+      },
+      {
+        "command": "codeTimer.add5Min",
+        "title": "Code Timer: +5 minutes"
+      },
+      {
+        "command": "codeTimer.add30Sec",
+        "title": "Code Timer: +30 seconds"
+      },
+      {
+        "command": "codeTimer.sub30Sec",
+        "title": "Code Timer: -30 seconds"
+      },
+      {
+        "command": "codeTimer.sub5Min",
+        "title": "Code Timer: -5 minutes"
+      },
+      {
+        "command": "codeTimer.subHour",
+        "title": "Code Timer: -1 hour"
+      },
+      {
+        "command": "codeTimer.installGitHook",
+        "title": "Code Timer: Install Git Hooks"
+      },
+      {
+        "command": "codeTimer.uninstallGitHook",
+        "title": "Code Timer: Uninstall Git Hooks"
+      }
+    ],
+    "configuration": {
+      "title": "Code Timer",
+      "properties": {
+        "codeTimer.pauseAfterSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "description": "Pause timer after this many seconds without keystrokes."
+        },
+        "codeTimer.autoStartOnTyping": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the timer when you begin typing."
+        },
+        "codeTimer.injectIntoCommits": {
+          "type": "boolean",
+          "default": true,
+          "description": "Append elapsed time to git commit messages via a prepare-commit-msg hook."
+        },
+        "codeTimer.displayFormat": {
+          "type": "string",
+          "default": "{{hours \"hr\"s}} {{minutes \"min\"}} {{seconds \"sec\"}}",
+          "markdownDescription": "Status bar format. Tokens: `{{hours}}`, `{{minutes}}`, `{{seconds}}` (leftover); `{{totalHours}}`, `{{totalMinutes}}`, `{{totalSeconds}}`. Add a label like `{{hours \"hr\"}}` for `8 hr`, or `{{hours \"hr\"s}}` to auto-pluralize (`8 hrs`, `1 hr`). Zero-value tokens with a label are omitted."
+        },
+        "codeTimer.gitFormat": {
+          "type": "string",
+          "default": "Took {{hours \"hour\"s}} {{minutes \"minute\"s}} {{seconds \"second\"s}}",
+          "description": "Format used when injecting elapsed time into commit messages. Same token syntax as displayFormat."
+        },
+        "codeTimer.promptOnReturn": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the timer has auto-paused and you start typing again, show a prompt asking whether to count the time you were away."
+        }
+      }
+    }
+  }
+}
