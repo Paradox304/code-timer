@@ -19,7 +19,7 @@ interface FullConfig extends TimerConfig {
 const LEGACY_STATE_KEY = 'codeTimer.seconds';
 
 function readConfig(): FullConfig {
-  const c = vscode.workspace.getConfiguration('codeTimer');
+  const c = vscode.workspace.getConfiguration('gitCodeTimer');
   return {
     pauseAfter: c.get<number>('pauseAfterSeconds', 120),
     autoStart: c.get<boolean>('autoStartOnTyping', true),
@@ -42,7 +42,7 @@ function formatAway(seconds: number): string {
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBar.command = 'codeTimer.actions';
+  statusBar.command = 'gitCodeTimer.actions';
   context.subscriptions.push(statusBar);
 
   // Load initial state: prefer the committed file; fall back to legacy memento.
@@ -70,7 +70,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar.text = `${icon} ${text}`;
     const totalText = formatElapsed(cfg.displayFormat, timer.getTotal()) || '0';
     statusBar.tooltip = new vscode.MarkdownString(
-      `**Code Timer** — ${timer.isActive() ? 'active' : 'paused'}\n\n` +
+      `**Git Code Timer** — ${timer.isActive() ? 'active' : 'paused'}\n\n` +
       `Since last commit: **${text}**\n\n` +
       `Lifetime on this repo: **${totalText}**\n\n` +
       `Click for actions.`
@@ -161,8 +161,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const reg = (id: string, fn: () => void | Promise<void>) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('codeTimer.reset', () => timer.reset());
-  reg('codeTimer.resetTotal', async () => {
+  reg('gitCodeTimer.reset', () => timer.reset());
+  reg('gitCodeTimer.resetTotal', async () => {
     const choice = await vscode.window.showWarningMessage(
       'Reset lifetime total to 0? This cannot be undone.',
       { modal: true },
@@ -170,17 +170,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     if (choice === 'Reset Total') timer.resetTotal();
   });
-  reg('codeTimer.toggle', () => (timer.isActive() ? timer.pause() : timer.resume()));
-  reg('codeTimer.addHour', () => timer.adjust(3600));
-  reg('codeTimer.add5Min', () => timer.adjust(300));
-  reg('codeTimer.add30Sec', () => timer.adjust(30));
-  reg('codeTimer.sub30Sec', () => timer.adjust(-30));
-  reg('codeTimer.sub5Min', () => timer.adjust(-300));
-  reg('codeTimer.subHour', () => timer.adjust(-3600));
-  reg('codeTimer.installGitHook', () => installHooks(false));
-  reg('codeTimer.uninstallGitHook', () => uninstallHooks());
+  reg('gitCodeTimer.toggle', () => (timer.isActive() ? timer.pause() : timer.resume()));
+  reg('gitCodeTimer.addHour', () => timer.adjust(3600));
+  reg('gitCodeTimer.add5Min', () => timer.adjust(300));
+  reg('gitCodeTimer.add30Sec', () => timer.adjust(30));
+  reg('gitCodeTimer.sub30Sec', () => timer.adjust(-30));
+  reg('gitCodeTimer.sub5Min', () => timer.adjust(-300));
+  reg('gitCodeTimer.subHour', () => timer.adjust(-3600));
+  reg('gitCodeTimer.installGitHook', () => installHooks(false));
+  reg('gitCodeTimer.uninstallGitHook', () => uninstallHooks());
 
-  reg('codeTimer.actions', async () => {
+  reg('gitCodeTimer.actions', async () => {
     const items: (vscode.QuickPickItem & { run: () => void | Promise<void> })[] = [
       {
         label: timer.isActive() ? '$(debug-pause) Pause' : '$(play) Resume',
@@ -189,7 +189,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { label: '$(refresh) Reset Current', run: () => timer.reset() },
       {
         label: '$(trash) Reset Total',
-        run: () => vscode.commands.executeCommand('codeTimer.resetTotal'),
+        run: () => vscode.commands.executeCommand('gitCodeTimer.resetTotal'),
       },
       { label: '', kind: vscode.QuickPickItemKind.Separator, run: () => {} },
       { label: '$(add) +1 hour', run: () => timer.adjust(3600) },
@@ -201,21 +201,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       { label: '', kind: vscode.QuickPickItemKind.Separator, run: () => {} },
       {
         label: '$(gear) Open Settings…',
-        run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'codeTimer'),
+        run: () => vscode.commands.executeCommand('workbench.action.openSettings', 'gitCodeTimer'),
       },
     ];
     const cfg = readConfig();
     const display = formatElapsed(cfg.displayFormat, timer.getSeconds()) || '0';
     const pick = await vscode.window.showQuickPick(items, {
-      placeHolder: `Code Timer — ${display} (${timer.isActive() ? 'active' : 'paused'})`,
+      placeHolder: `Git Code Timer — ${display} (${timer.isActive() ? 'active' : 'paused'})`,
     });
     if (pick) await pick.run();
   });
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-      if (!e.affectsConfiguration('codeTimer')) return;
-      if (e.affectsConfiguration('codeTimer.stateFile')) {
+      if (!e.affectsConfiguration('gitCodeTimer')) return;
+      if (e.affectsConfiguration('gitCodeTimer.stateFile')) {
         // Path changed: re-watch the new path. If the new file already
         // exists, adopt its values; otherwise write current state to it.
         installWatcher();

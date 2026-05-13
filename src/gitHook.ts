@@ -22,7 +22,7 @@ printf '\\n\\n%s\\n' "$line" >> "$1"
 
 const POST_HOOK = `#!/bin/sh
 ${MARKER}
-# Signals the Code Timer extension to reset after a commit.
+# Signals the Git Code Timer extension to reset after a commit.
 git_dir="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
 : > "$git_dir/${ELAPSED_FILENAME}"
 `;
@@ -57,16 +57,16 @@ export async function installHooks(silent = false): Promise<void> {
       const states = [prep, post];
       if (states.includes('exists-foreign')) {
         vscode.window.showWarningMessage(
-          'Code Timer: a non-Code-Timer git hook already exists. Skipping install — integrate manually or remove the existing hook.'
+          'Git Code Timer: a foreign git hook already exists. Skipping install — integrate manually or remove the existing hook.'
         );
       } else if (states.every(s => s === 'noop')) {
-        vscode.window.showInformationMessage('Code Timer: git hooks already installed.');
+        vscode.window.showInformationMessage('Git Code Timer: git hooks already installed.');
       } else {
-        vscode.window.showInformationMessage('Code Timer: git hooks installed.');
+        vscode.window.showInformationMessage('Git Code Timer: git hooks installed.');
       }
     }
   } catch (e) {
-    if (!silent) vscode.window.showErrorMessage(`Code Timer: hook install failed — ${e}`);
+    if (!silent) vscode.window.showErrorMessage(`Git Code Timer: hook install failed — ${e}`);
   }
 }
 
@@ -80,7 +80,7 @@ export async function uninstallHooks(): Promise<void> {
   }
   const ef = elapsedFilePath();
   if (ef) await fs.unlink(ef).catch(() => {});
-  vscode.window.showInformationMessage('Code Timer: git hooks removed.');
+  vscode.window.showInformationMessage('Git Code Timer: git hooks removed.');
 }
 
 export async function writeElapsed(text: string): Promise<void> {

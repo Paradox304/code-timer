@@ -13,7 +13,7 @@ export function stateFilePath(): string | undefined {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!root) return undefined;
   const rel = vscode.workspace
-    .getConfiguration('codeTimer')
+    .getConfiguration('gitCodeTimer')
     .get<string>('stateFile', DEFAULT_FILENAME)
     .trim() || DEFAULT_FILENAME;
   // Relative to workspace root; absolute paths are accepted as-is.
