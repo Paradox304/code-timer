@@ -2,7 +2,7 @@
   "name": "git-code-timer",
   "displayName": "Git Code Timer",
   "description": "Tracks active coding time per repo and injects it into git commit messages.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "Paradox304",
   "license": "MIT",
   "repository": {

@@ -8,6 +8,7 @@ import {
   elapsedWasCleared,
 } from './gitHook';
 import { readState, writeState, stateFilePath } from './stateFile';
+import { initLog, log } from './log';
 
 interface FullConfig extends TimerConfig {
   inject: boolean;
@@ -41,6 +42,10 @@ function formatAway(seconds: number): string {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const channel = initLog();
+  context.subscriptions.push(channel);
+  log(`activate: workspaceFolder=${vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '<none>'}`);
+
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'gitCodeTimer.actions';
   context.subscriptions.push(statusBar);
@@ -144,7 +149,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (cfg.inject) {
       if (await elapsedWasCleared()) {
         // post-commit hook emptied the file → reset current count.
-        if (timer.getSeconds() > 0) timer.reset();
+        if (timer.getSeconds() > 0) {
+          log(`tick: resetting current (was ${Math.round(timer.getSeconds())}s) after detected post-commit clear`);
+          timer.reset();
+        }
       }
       const line = formatElapsed(cfg.gitFormat, timer.getSeconds());
       await writeElapsed(line);
