@@ -78,23 +78,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBar.show();
   };
 
-  let awayPromptOpen = false;
   const handleResumeFromPause = async (awaySeconds: number): Promise<void> => {
     const cfg = readConfig();
-    if (!cfg.promptOnReturn || awayPromptOpen) return;
-    awayPromptOpen = true;
-    try {
-      const label = formatAway(awaySeconds);
-      const COUNT = `Count ${label}`;
-      const choice = await vscode.window.showInformationMessage(
-        `Welcome back — you were away for ${label}. Count it as work time?`,
-        COUNT,
-        'Skip',
-      );
-      if (choice === COUNT) timer.adjust(awaySeconds);
-    } finally {
-      awayPromptOpen = false;
-    }
+    if (!cfg.promptOnReturn) return;
+    const label = formatAway(awaySeconds);
+    const COUNT = `Count ${label}`;
+    const choice = await vscode.window.showInformationMessage(
+      `Welcome back — you were away for ${label}. Count it as work time?`,
+      COUNT,
+      'Skip',
+    );
+    if (choice === COUNT) timer.adjust(awaySeconds);
   };
 
   const timer = new Timer(
