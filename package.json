@@ -3,7 +3,7 @@
   "displayName": "Code Timer",
   "description": "Tracks active coding time per repo and injects it into git commit messages.",
   "version": "0.1.0",
-  "publisher": "local",
+  "publisher": "Paradox304",
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -29,7 +29,11 @@
       },
       {
         "command": "codeTimer.reset",
-        "title": "Code Timer: Reset"
+        "title": "Code Timer: Reset Current"
+      },
+      {
+        "command": "codeTimer.resetTotal",
+        "title": "Code Timer: Reset Total"
       },
       {
         "command": "codeTimer.toggle",
@@ -101,6 +105,11 @@
           "type": "boolean",
           "default": true,
           "description": "When the timer has auto-paused and you start typing again, show a prompt asking whether to count the time you were away."
+        },
+        "codeTimer.stateFile": {
+          "type": "string",
+          "default": ".code-timer.json",
+          "markdownDescription": "Path (relative to workspace root) where lifetime + current seconds are persisted. Commit it to share time across machines, or add it to `.gitignore` to keep it per-machine. Examples: `.code-timer.json`, `.vscode/code-timer.json`."
         }
       }
     }

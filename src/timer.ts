@@ -1,34 +1,48 @@
-import * as vscode from 'vscode';
-
 export interface TimerConfig {
   pauseAfter: number;   // seconds of idle before auto-pause
   autoStart: boolean;   // start timer on first keystroke automatically
 }
 
-const STATE_KEY = 'codeTimer.seconds';
+export interface PersistedState {
+  total: number;
+  current: number;
+}
+
 const TICK_MS = 1000;
 
 export type ResumeFromPauseHandler = (awaySeconds: number) => void;
+export type PersistFn = (state: PersistedState) => void;
 
 export class Timer {
-  private seconds: number;
+  private current: number;
+  private total: number;
   private lastKeystroke = 0;
   private lastTickAt = 0;
   private pausedAt = 0;
   private active = false;
+  private manualPause = false;
   private tickHandle: NodeJS.Timeout | undefined;
 
   constructor(
-    private state: vscode.Memento,
+    initial: PersistedState,
     private getConfig: () => TimerConfig,
+    private persist: PersistFn,
     private onChange: () => void,
     private onResumeFromPause?: ResumeFromPauseHandler,
   ) {
-    this.seconds = state.get<number>(STATE_KEY, 0);
+    this.current = initial.current;
+    this.total = initial.total;
   }
 
-  getSeconds(): number { return this.seconds; }
+  getSeconds(): number { return this.current; }
+  getTotal(): number { return this.total; }
   isActive(): boolean { return this.active; }
+
+  setState(state: PersistedState): void {
+    this.current = state.current;
+    this.total = state.total;
+    this.onChange();
+  }
 
   onKeystroke(): void {
     const cfg = this.getConfig();
@@ -37,10 +51,11 @@ export class Timer {
     const now = Date.now();
     const resumingFromPause = !this.active && this.lastKeystroke > 0;
 
-    if (resumingFromPause) {
+    if (resumingFromPause && !this.manualPause) {
       const awaySec = (now - this.pausedAt) / 1000;
       this.onResumeFromPause?.(awaySec);
     }
+    this.manualPause = false;
 
     this.lastKeystroke = now;
     if (!this.active) {
@@ -52,16 +67,13 @@ export class Timer {
   }
 
   pause(): void {
-    if (!this.active) return;
-    this.active = false;
-    this.pausedAt = Date.now();
-    this.stopTick();
-    this.persist();
-    this.onChange();
+    this.manualPause = true;
+    this.doPause();
   }
 
   resume(): void {
     if (this.active) return;
+    this.manualPause = false;
     this.active = true;
     const now = Date.now();
     this.lastKeystroke = now;
@@ -70,17 +82,38 @@ export class Timer {
     this.onChange();
   }
 
+  private doPause(): void {
+    if (!this.active) return;
+    this.active = false;
+    this.pausedAt = Date.now();
+    this.stopTick();
+    this.save();
+    this.onChange();
+  }
+
+  // Clears `current` (per-commit count). Lifetime `total` is preserved.
   reset(): void {
-    this.seconds = 0;
+    this.current = 0;
     this.pause();
     this.lastKeystroke = 0;
-    this.persist();
+    this.save();
+    this.onChange();
+  }
+
+  // Clears both `current` and lifetime `total`.
+  resetTotal(): void {
+    this.current = 0;
+    this.total = 0;
+    this.pause();
+    this.lastKeystroke = 0;
+    this.save();
     this.onChange();
   }
 
   adjust(deltaSeconds: number): void {
-    this.seconds = Math.max(0, this.seconds + deltaSeconds);
-    this.persist();
+    this.current = Math.max(0, this.current + deltaSeconds);
+    this.total = Math.max(0, this.total + deltaSeconds);
+    this.save();
     this.onChange();
   }
 
@@ -107,22 +140,25 @@ export class Timer {
     const pauseAt = this.lastKeystroke + cfg.pauseAfter * 1000;
 
     if (now >= pauseAt) {
-      // Credit time up to the pause boundary, then stop.
       if (pauseAt > this.lastTickAt) {
-        this.seconds += (pauseAt - this.lastTickAt) / 1000;
+        const delta = (pauseAt - this.lastTickAt) / 1000;
+        this.current += delta;
+        this.total += delta;
       }
       this.lastTickAt = now;
-      this.pause();
+      this.doPause();
       return;
     }
 
-    this.seconds += (now - this.lastTickAt) / 1000;
+    const delta = (now - this.lastTickAt) / 1000;
+    this.current += delta;
+    this.total += delta;
     this.lastTickAt = now;
-    this.persist();
+    this.save();
     this.onChange();
   }
 
-  private persist(): void {
-    void this.state.update(STATE_KEY, this.seconds);
+  private save(): void {
+    this.persist({ total: this.total, current: this.current });
   }
 }
