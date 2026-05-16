@@ -9,20 +9,20 @@ export interface TimerState {
   current: number;  // seconds since last reset / commit
 }
 
-export function stateFilePath(): string | undefined {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!root) return undefined;
+// Resolves the state-file path for a single workspace folder. The `stateFile`
+// setting is read per-folder so a multi-root workspace can override it per
+// repository if desired.
+export function stateFilePath(root: string): string {
   const rel = vscode.workspace
-    .getConfiguration('gitCodeTimer')
+    .getConfiguration('gitCodeTimer', vscode.Uri.file(root))
     .get<string>('stateFile', DEFAULT_FILENAME)
     .trim() || DEFAULT_FILENAME;
-  // Relative to workspace root; absolute paths are accepted as-is.
+  // Relative to the folder root; absolute paths are accepted as-is.
   return path.isAbsolute(rel) ? rel : path.join(root, rel);
 }
 
-export async function readState(): Promise<TimerState | undefined> {
-  const p = stateFilePath();
-  if (!p) return undefined;
+export async function readState(root: string): Promise<TimerState | undefined> {
+  const p = stateFilePath(root);
   const body = await fs.readFile(p, 'utf8').catch(() => undefined);
   if (body === undefined) return undefined;
   try {
@@ -35,9 +35,8 @@ export async function readState(): Promise<TimerState | undefined> {
   }
 }
 
-export async function writeState(state: TimerState): Promise<void> {
-  const p = stateFilePath();
-  if (!p) return;
+export async function writeState(root: string, state: TimerState): Promise<void> {
+  const p = stateFilePath(root);
   const body = JSON.stringify({
     total: Math.round(state.total),
     current: Math.round(state.current),

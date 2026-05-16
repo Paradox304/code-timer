@@ -65,13 +65,17 @@ fi
 exit 0
 `;
 
-function gitDir(): string | undefined {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  return root ? path.join(root, '.git') : undefined;
+// Resolves the `.git` directory for a folder. Returns undefined when the
+// folder is not a git repository (no `.git` present), in which case hook
+// operations are skipped but time is still tracked.
+async function gitDir(root: string): Promise<string | undefined> {
+  const candidate = path.join(root, '.git');
+  const stat = await fs.stat(candidate).catch(() => undefined);
+  return stat?.isDirectory() ? candidate : undefined;
 }
 
-export function elapsedFilePath(): string | undefined {
-  const dir = gitDir();
+export async function elapsedFilePath(root: string): Promise<string | undefined> {
+  const dir = await gitDir(root);
   return dir ? path.join(dir, ELAPSED_FILENAME) : undefined;
 }
 
@@ -102,15 +106,16 @@ async function writeHook(hookPath: string, body: string): Promise<WriteResult> {
 type ForeignChoice = 'replace' | 'chain' | 'skip';
 
 // Asks the user how to handle a foreign hook we'd otherwise overwrite.
-// Memoized for the lifetime of the VSCode window so a single "Chain" answer
-// covers both prepare and post hooks without a second prompt.
+// Memoized per installHooks() call so a single "Chain" answer covers both
+// the prepare and post hooks of one repo without a second prompt; each
+// repository in a multi-root workspace is resolved independently.
 let rememberedChoice: ForeignChoice | undefined;
 
-async function resolveForeignHook(hookPath: string): Promise<ForeignChoice> {
+async function resolveForeignHook(hookPath: string, repoLabel: string): Promise<ForeignChoice> {
   if (rememberedChoice) return rememberedChoice;
   const name = path.basename(hookPath);
   const choice = await vscode.window.showWarningMessage(
-    `Git Code Timer: another tool already owns ${name}. How should we proceed?`,
+    `Git Code Timer: another tool already owns ${name} in "${repoLabel}". How should we proceed?`,
     { modal: false },
     'Replace',
     'Chain (run both)',
@@ -142,14 +147,17 @@ async function applyForeignChoice(
   log(`hook chained: ours at ${hookPath}, foreign saved at ${foreignPath}`);
 }
 
-export async function installHooks(silent = false): Promise<void> {
-  const dir = gitDir();
+export type InstallResult = 'installed' | 'noop' | 'skipped' | 'no-git' | 'error';
+
+export async function installHooks(root: string): Promise<InstallResult> {
+  const dir = await gitDir(root);
   if (!dir) {
-    log('installHooks: no .git dir (no workspace folder?)');
-    return;
+    log(`installHooks: no .git dir for ${root} — skipping (time still tracked)`);
+    return 'no-git';
   }
+  const repoLabel = path.basename(root);
   const hooksDir = path.join(dir, 'hooks');
-  log(`installHooks: target=${hooksDir} silent=${silent}`);
+  log(`installHooks: target=${hooksDir}`);
   rememberedChoice = undefined;
   try {
     await fs.mkdir(hooksDir, { recursive: true });
@@ -162,7 +170,7 @@ export async function installHooks(silent = false): Promise<void> {
     for (const [hookPath, body] of targets) {
       const w = await writeHook(hookPath, body);
       if (w.result === 'foreign') {
-        const choice = await resolveForeignHook(hookPath);
+        const choice = await resolveForeignHook(hookPath, repoLabel);
         await applyForeignChoice(hookPath, body, w.foreignBody, choice);
         states.push(choice === 'skip' ? 'foreign-skipped' : choice);
       } else {
@@ -170,26 +178,19 @@ export async function installHooks(silent = false): Promise<void> {
       }
     }
 
-    if (!silent) {
-      if (states.includes('foreign-skipped')) {
-        vscode.window.showWarningMessage(
-          'Git Code Timer: one or more hooks were skipped. Re-run "Install Git Hooks" if you change your mind.',
-        );
-      } else if (states.every((s) => s === 'noop')) {
-        vscode.window.showInformationMessage('Git Code Timer: git hooks already installed.');
-      } else {
-        vscode.window.showInformationMessage('Git Code Timer: git hooks installed.');
-      }
-    }
+    if (states.includes('foreign-skipped')) return 'skipped';
+    if (states.every((s) => s === 'noop')) return 'noop';
+    return 'installed';
   } catch (e) {
-    if (!silent) vscode.window.showErrorMessage(`Git Code Timer: hook install failed — ${e}`);
     log(`installHooks error: ${e}`);
+    return 'error';
   }
 }
 
-export async function uninstallHooks(): Promise<void> {
-  const dir = gitDir();
-  if (!dir) return;
+export async function uninstallHooks(root: string): Promise<boolean> {
+  const dir = await gitDir(root);
+  if (!dir) return false;
+  let touched = false;
   for (const name of ['prepare-commit-msg', 'post-commit']) {
     const p = path.join(dir, 'hooks', name);
     const body = await fs.readFile(p, 'utf8').catch(() => '');
@@ -206,34 +207,37 @@ export async function uninstallHooks(): Promise<void> {
       await fs.unlink(p).catch(() => {});
       log(`uninstall: removed our hook at ${p}`);
     }
+    touched = true;
   }
-  const ef = elapsedFilePath();
+  const ef = await elapsedFilePath(root);
   if (ef) await fs.unlink(ef).catch(() => {});
-  vscode.window.showInformationMessage('Git Code Timer: git hooks removed.');
+  return touched;
 }
 
-let lastWrittenElapsed: string | undefined;
+// Dedup of the last-written elapsed line, keyed per repo so a noisy log
+// line isn't printed every tick for every folder.
+const lastWrittenElapsed = new Map<string, string>();
 
-export async function writeElapsed(text: string): Promise<void> {
-  const p = elapsedFilePath();
+export async function writeElapsed(root: string, text: string): Promise<void> {
+  const p = await elapsedFilePath(root);
   if (!p) return;
-  if (text !== lastWrittenElapsed) {
+  if (text !== lastWrittenElapsed.get(root)) {
     log(`writeElapsed → ${p}: "${text}"`);
-    lastWrittenElapsed = text;
+    lastWrittenElapsed.set(root, text);
   }
   await fs.writeFile(p, text).catch((e) => log(`writeElapsed failed: ${e}`));
 }
 
 // Returns true when the elapsed file has been emptied externally
 // (post-commit hook truncates it after a commit).
-export async function elapsedWasCleared(): Promise<boolean> {
-  const p = elapsedFilePath();
+export async function elapsedWasCleared(root: string): Promise<boolean> {
+  const p = await elapsedFilePath(root);
   if (!p) return false;
   const body = await fs.readFile(p, 'utf8').catch(() => null);
   const cleared = body === '';
   if (cleared) {
     log(`elapsedWasCleared: file at ${p} is empty — post-commit hook fired`);
-    lastWrittenElapsed = undefined;
+    lastWrittenElapsed.delete(root);
   }
   return cleared;
 }

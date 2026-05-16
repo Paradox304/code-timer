@@ -2,7 +2,7 @@
   "name": "git-code-timer",
   "displayName": "Git Code Timer",
   "description": "Tracks active coding time per repo and injects it into git commit messages.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "Paradox304",
   "license": "MIT",
   "repository": {
@@ -47,6 +47,10 @@
       {
         "command": "gitCodeTimer.toggle",
         "title": "Git Code Timer: Pause / Resume"
+      },
+      {
+        "command": "gitCodeTimer.pauseAll",
+        "title": "Git Code Timer: Pause All Repos"
       },
       {
         "command": "gitCodeTimer.addHour",
